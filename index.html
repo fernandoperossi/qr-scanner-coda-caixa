@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leitor QR Code → Input Coda</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 20px;
+    }
+    #reader {
+      width: 300px;
+      margin: auto;
+    }
+    #result {
+      margin-top: 20px;
+      font-size: 18px;
+      font-weight: bold;
+      color: green;
+    }
+  </style>
+</head>
+<body>
+  <h1>Escanear QR Code</h1>
+  <div id="reader"></div>
+  <div id="result">Aguardando leitura...</div>
+
+  <script>
+    // 🔑 Configure seus dados do Coda
+    const CODA_API_KEY = "5a948af2-729f-4376-ac4f-5ff25446348b";
+    const DOC_ID = "AeDUOeLw7V";
+    const CONTROL_NAME = "Input_QR_Caixa"; // Nome do controle no Coda
+
+    async function atualizarControle(valor) {
+      const url = `https://coda.io/apis/v1/docs/${DOC_ID}/controls/${CONTROL_NAME}`;
+
+      const body = { value: valor };
+
+      try {
+        const response = await fetch(url, {
+          method: "PUT",
+          headers: {
+            "Authorization": `Bearer ${CODA_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (response.ok) {
+          document.getElementById("result").innerText = "✅ Atualizado no Coda: " + valor;
+        } else {
+          const error = await response.json();
+          console.error("Erro ao atualizar controle:", error);
+          document.getElementById("result").innerText = "❌ Erro ao atualizar Input";
+        }
+      } catch (err) {
+        console.error("Erro de conexão:", err);
+        document.getElementById("result").innerText = "❌ Falha na conexão com Coda";
+      }
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+      document.getElementById("result").innerText = "QR Code lido: " + decodedText;
+      atualizarControle(decodedText);
+    }
+
+    function onScanError(errorMessage) {
+      // erros de leitura contínua podem ser ignorados
+    }
+
+    let html5QrcodeScanner = new Html5QrcodeScanner(
+      "reader", { fps: 10, qrbox: 250 }
+    );
+    html5QrcodeScanner.render(onScanSuccess, onScanError);
+  </script>
+</body>
+</html>
