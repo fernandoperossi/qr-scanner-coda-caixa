@@ -3,78 +3,88 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Leitor QR Code → Input Coda</title>
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <title>Scanner QR Code - Coda</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       text-align: center;
-      margin: 20px;
+      padding: 20px;
     }
     #reader {
       width: 300px;
       margin: auto;
     }
-    #result {
+    #status {
       margin-top: 20px;
-      font-size: 18px;
       font-weight: bold;
-      color: green;
     }
   </style>
+  <!-- Biblioteca para leitura de QR Code -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 <body>
-  <h1>Escanear QR Code</h1>
+  <h2>Escanear QR Code</h2>
   <div id="reader"></div>
-  <div id="result">Aguardando leitura...</div>
+  <p id="resultado"></p>
+  <p id="status"></p>
 
   <script>
-    // 🔑 Configure seus dados do Coda
-    const CODA_API_KEY = "6589a950-8a55-46a5-b658-ab196e49c4e1";
-    const DOC_ID = "AeDUOeLw7V";
-    const CONTROL_NAME = "Input_QR_Caixa"; // Nome do controle no Coda
+    // 🔑 Configurações do Coda (substituir pelos seus dados)
+    const CODA_API_KEY = "6589a950-8a55-46a5-b658-ab196e49c4e1"; // Exemplo: "abc123..."
+    const DOC_ID = "AeDUOeLw7V";            // ID do documento
+    const TABLE_NAME = "Scanner";           // Nome da tabela criada no Coda
+    const COLUMN_ID = "c-c2KFsNnkvh";           // ID da coluna que vai receber o QR
 
-    async function atualizarControle(valor) {
-      const url = `https://coda.io/apis/v1/docs/${DOC_ID}/controls/${CONTROL_NAME}`;
-
-      const body = { value: valor };
-
+    // Função para enviar valor para o Coda
+    async function enviarParaCoda(valor) {
       try {
-        const response = await fetch(url, {
-          method: "PUT",
+        const response = await fetch(`https://coda.io/apis/v1/docs/${DOC_ID}/tables/${TABLE_NAME}/rows`, {
+          method: "POST",
           headers: {
             "Authorization": `Bearer ${CODA_API_KEY}`,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify(body)
+          body: JSON.stringify({
+            rows: [
+              {
+                cells: [
+                  { column: COLUMN_ID, value: valor }
+                ]
+              }
+            ]
+          })
         });
 
         if (response.ok) {
-          document.getElementById("result").innerText = "✅ Atualizado no Coda: " + valor;
+          document.getElementById("status").innerHTML = "✅ Valor enviado com sucesso!";
         } else {
-          const error = await response.json();
-          console.error("Erro ao atualizar controle:", error);
-          document.getElementById("result").innerText = "❌ Erro ao atualizar Input";
+          const erro = await response.json();
+          document.getElementById("status").innerHTML = "❌ Erro ao enviar: " + JSON.stringify(erro);
         }
       } catch (err) {
-        console.error("Erro de conexão:", err);
-        document.getElementById("result").innerText = "❌ Falha na conexão com Coda";
+        document.getElementById("status").innerHTML = "❌ Erro inesperado: " + err.message;
       }
     }
 
-    function onScanSuccess(decodedText, decodedResult) {
-      document.getElementById("result").innerText = "QR Code lido: " + decodedText;
-      atualizarControle(decodedText);
+    // Função chamada quando QR Code é escaneado
+    function onScanSuccess(decodedText) {
+      document.getElementById("resultado").innerText = "QR Code: " + decodedText;
+      enviarParaCoda(decodedText);
     }
 
-    function onScanError(errorMessage) {
-      // erros de leitura contínua podem ser ignorados
-    }
-
-    let html5QrcodeScanner = new Html5QrcodeScanner(
-      "reader", { fps: 10, qrbox: 250 }
-    );
-    html5QrcodeScanner.render(onScanSuccess, onScanError);
+    // Iniciar leitor
+    const html5QrCode = new Html5Qrcode("reader");
+    Html5Qrcode.getCameras().then(devices => {
+      if (devices && devices.length) {
+        html5QrCode.start(
+          { facingMode: "environment" }, // câmera traseira
+          { fps: 10, qrbox: 250 },
+          onScanSuccess
+        );
+      }
+    }).catch(err => {
+      document.getElementById("status").innerHTML = "❌ Erro ao acessar câmera: " + err;
+    });
   </script>
 </body>
 </html>
