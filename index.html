@@ -1,169 +1,62 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Scanner QR Code - Coda</title>
-
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leitor QR Code</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 18px; }
-    #reader { width: 100%; max-width: 420px; margin: 0 auto; }
-    #resultado { margin-top: 12px; font-size: 16px; }
-    #status { margin-top: 8px; font-weight: bold; color: #b00; }
-    #backBtn { display: none; margin-top: 12px; padding: 8px 14px; border-radius: 6px; border: 1px solid #ccc; background: white; cursor: pointer; }
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: #f9f9f9;
+    }
+    #reader {
+      width: 300px;
+    }
   </style>
-
-  <!-- biblioteca html5-qrcode -->
-  <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 <body>
-  <h2>Escanear QR Code</h2>
+  <h2>Escaneie o QR Code</h2>
   <div id="reader"></div>
-  <div id="resultado">Aguardando leitura...</div>
-  <div id="status"></div>
-  <button id="backBtn">Voltar ao Coda</button>
 
   <script>
-    // ======= CONFIGURE AQUI (substitua pelos seus valores) =======
-    const CODA_API_KEY = "6589a950-8a55-46a5-b658-ab196e49c4e1";
-    const DOC_ID = "AeDUOeLw7V";       
-    const TABLE_NAME = "Scanner";      
-    const COLUMN_ID = "c-c2KFsNnkvh";  
-    // ============================================================
+    let alreadyScanned = false;
 
-    // Parâmetros opcionais via URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const returnUrl = urlParams.get("returnUrl"); 
-    const paramDocId = urlParams.get("docId");
-    const paramTable = urlParams.get("tableName") || urlParams.get("tableId");
-    const paramColumn = urlParams.get("columnId");
+    function onScanSuccess(decodedText, decodedResult) {
+      if (alreadyScanned) return; // evita múltiplas leituras
+      alreadyScanned = true;
 
-    const effectiveDocId = paramDocId || DOC_ID;
-    const effectiveTable = paramTable || TABLE_NAME;
-    const effectiveColumn = paramColumn || COLUMN_ID;
+      // Para o scanner imediatamente
+      html5QrcodeScanner.clear().then(_ => {
+        console.log("Scanner parado.");
+      }).catch(error => {
+        console.error("Erro ao parar scanner: ", error);
+      });
 
-    const resultadoEl = document.getElementById("resultado");
-    const statusEl = document.getElementById("status");
-    const backBtn = document.getElementById("backBtn");
-
-    let html5QrCode = null;
-    let scanned = false;
-
-    async function enviarParaCoda(valor) {
-      const url = `https://coda.io/apis/v1/docs/${encodeURIComponent(effectiveDocId)}/tables/${encodeURIComponent(effectiveTable)}/rows`;
-      const body = {
-        rows: [
-          { cells: [{ column: effectiveColumn, value: valor }] }
-        ]
-      };
-
-      try {
-        statusEl.style.color = "#333";
-        statusEl.innerText = "Enviando para Coda...";
-        const resp = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${CODA_API_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(body)
-        });
-
-        if (!resp.ok) {
-          const errorBody = await resp.text();
-          statusEl.style.color = "#b00";
-          statusEl.innerText = "❌ Erro ao enviar para Coda: " + resp.status + " - " + errorBody;
-          console.error("Erro Coda:", resp.status, errorBody);
-          return false;
-        }
-
-        statusEl.style.color = "green";
-        statusEl.innerText = "✅ Enviado para Coda!";
-        return true;
-      } catch (err) {
-        statusEl.style.color = "#b00";
-        statusEl.innerText = "❌ Falha na requisição: " + err.message;
-        console.error("Erro fetch:", err);
-        return false;
-      }
-    }
-
-    async function onScanSuccess(decodedText) {
-      if (scanned) return; 
-      scanned = true; // trava imediatamente
-
-      resultadoEl.innerText = "QR Code lido: " + decodedText;
-      statusEl.innerText = "Parando câmera...";
-
-      // Para a câmera imediatamente
-      if (html5QrCode) {
-        html5QrCode.stop().catch(e => console.warn("Erro ao parar câmera:", e));
-        try { html5QrCode.clear(); } catch (e) {}
+      // Envia o valor para o Coda via postMessage
+      if (window.parent) {
+        window.parent.postMessage({ qrCode: decodedText }, "*");
       }
 
-      // Envia para Coda
-      const ok = await enviarParaCoda(decodedText);
-
-      // Redirecionamento
-      if (returnUrl) {
-        statusEl.innerText = (ok ? "Enviado. Voltando ao Coda..." : "Erro no envio — tentando voltar ao Coda...");
-        setTimeout(() => { window.location.href = returnUrl; }, 1200);
-        return;
-      }
-
-      try {
-        statusEl.innerText = (ok ? "Enviado. Retornando..." : "Erro no envio — volte manualmente.");
-        setTimeout(() => {
-          window.history.back();
-          setTimeout(() => {
-            if (!document.hidden) {
-              backBtn.style.display = "inline-block";
-              backBtn.onclick = () => { window.history.back(); };
-            }
-          }, 300);
-        }, 1200);
-      } catch (e) {
-        backBtn.style.display = "inline-block";
-        backBtn.onclick = () => { window.history.back(); };
-      }
+      // Alternativa: redirecionar com o valor na URL (se usar IFrame no Coda)
+      // window.location.href = window.location.origin + "?qr=" + encodeURIComponent(decodedText);
     }
 
     function onScanError(errorMessage) {
-      // apenas loga silenciosamente
+      // Apenas loga o erro de leitura, sem travar
+      console.warn(errorMessage);
     }
 
-    async function startScanner() {
-      try {
-        html5QrCode = new Html5Qrcode("reader");
-        const devices = await Html5Qrcode.getCameras();
-        if (!devices || devices.length === 0) {
-          statusEl.style.color = "#b00";
-          statusEl.innerText = "Nenhuma câmera encontrada.";
-          return;
-        }
-
-        let cameraConfig = { facingMode: "environment" };
-        const backCamera = devices.find(d => /back|rear|environment/i.test((d.label || "")));
-        if (backCamera) { cameraConfig = backCamera.id; }
-
-        await html5QrCode.start(
-          cameraConfig,
-          { fps: 10, qrbox: 250 },
-          onScanSuccess,
-          onScanError
-        );
-
-        statusEl.style.color = "#333";
-        statusEl.innerText = "Aguardando QR...";
-      } catch (err) {
-        statusEl.style.color = "#b00";
-        statusEl.innerText = "❌ Erro ao iniciar scanner: " + (err && err.message ? err.message : err);
-        console.error(err);
-      }
-    }
-
-    // iniciar ao carregar
-    startScanner();
+    let html5QrcodeScanner = new Html5QrcodeScanner(
+      "reader",
+      { fps: 10, qrbox: 250 }
+    );
+    html5QrcodeScanner.render(onScanSuccess, onScanError);
   </script>
 </body>
 </html>
