@@ -26,19 +26,18 @@
   <script>
     // ======= CONFIGURE AQUI (substitua pelos seus valores) =======
     const CODA_API_KEY = "6589a950-8a55-46a5-b658-ab196e49c4e1";
-    const DOC_ID = "AeDUOeLw7V";       // já preenchido no seu caso
-    const TABLE_NAME = "Scanner";      // nome (ou id) da tabela
-    const COLUMN_ID = "c-c2KFsNnkvh";      // id da coluna que receberá o QR (ex: "c-123abc")
+    const DOC_ID = "AeDUOeLw7V";       
+    const TABLE_NAME = "Scanner";      
+    const COLUMN_ID = "c-c2KFsNnkvh";  
     // ============================================================
 
-    // Lê parâmetros de URL (opcionalmente você pode passar docId/tableName/columnId/returnUrl)
+    // Parâmetros opcionais via URL
     const urlParams = new URLSearchParams(window.location.search);
-    const returnUrl = urlParams.get("returnUrl"); // url para voltar ao Coda (encoded)
+    const returnUrl = urlParams.get("returnUrl"); 
     const paramDocId = urlParams.get("docId");
     const paramTable = urlParams.get("tableName") || urlParams.get("tableId");
     const paramColumn = urlParams.get("columnId");
 
-    // se parâmetros vierem por URL, usam-se eles (permite passar dinamicamente)
     const effectiveDocId = paramDocId || DOC_ID;
     const effectiveTable = paramTable || TABLE_NAME;
     const effectiveColumn = paramColumn || COLUMN_ID;
@@ -48,10 +47,9 @@
     const backBtn = document.getElementById("backBtn");
 
     let html5QrCode = null;
-    let scanned = false; // impede repetições
+    let scanned = false;
 
     async function enviarParaCoda(valor) {
-      // Endpoint: POST /docs/{docId}/tables/{tableIdOrName}/rows
       const url = `https://coda.io/apis/v1/docs/${encodeURIComponent(effectiveDocId)}/tables/${encodeURIComponent(effectiveTable)}/rows`;
       const body = {
         rows: [
@@ -90,64 +88,50 @@
       }
     }
 
-    // Função chamada na primeira leitura do QR
     async function onScanSuccess(decodedText) {
-      if (scanned) return; // já processado
-      scanned = true;
+      if (scanned) return; 
+      scanned = true; // trava imediatamente
 
       resultadoEl.innerText = "QR Code lido: " + decodedText;
       statusEl.innerText = "Parando câmera...";
 
-      // Parar a câmera imediatamente
-      try {
-        if (html5QrCode) {
-          await html5QrCode.stop(); // para a câmera
-          try { html5QrCode.clear(); } catch (e) { /* ignora */ }
-        }
-      } catch (stopErr) {
-        console.warn("Erro ao parar câmera:", stopErr);
+      // Para a câmera imediatamente
+      if (html5QrCode) {
+        html5QrCode.stop().catch(e => console.warn("Erro ao parar câmera:", e));
+        try { html5QrCode.clear(); } catch (e) {}
       }
 
-      // Enviar para Coda e aguardar resultado
+      // Envia para Coda
       const ok = await enviarParaCoda(decodedText);
 
-      // Após enviar, tentar voltar ao Coda automaticamente
-      // 1) se houver returnUrl, tenta redirecionar para ele
+      // Redirecionamento
       if (returnUrl) {
         statusEl.innerText = (ok ? "Enviado. Voltando ao Coda..." : "Erro no envio — tentando voltar ao Coda...");
-        // usar small timeout pra garantir que o usuário veja o estado
-        setTimeout(() => {
-          window.location.href = returnUrl;
-        }, 600);
+        setTimeout(() => { window.location.href = returnUrl; }, 1200);
         return;
       }
 
-      // 2) se não houver returnUrl, tenta history.back() (se veio de outra página)
       try {
-        statusEl.innerText = (ok ? "Enviado. Retornando..." : "Erro no envio — você pode voltar manualmente.");
+        statusEl.innerText = (ok ? "Enviado. Retornando..." : "Erro no envio — volte manualmente.");
         setTimeout(() => {
           window.history.back();
-          // se não funcionou, mostrar botão para o usuário voltar manualmente
           setTimeout(() => {
-            if (!document.hidden) { // manter botão visível
+            if (!document.hidden) {
               backBtn.style.display = "inline-block";
               backBtn.onclick = () => { window.history.back(); };
             }
           }, 300);
-        }, 600);
+        }, 1200);
       } catch (e) {
-        // fallback para mostrar botão
         backBtn.style.display = "inline-block";
         backBtn.onclick = () => { window.history.back(); };
       }
     }
 
     function onScanError(errorMessage) {
-      // Erros contínuos de leitura podem ser ignorados silenciosamente
-      // console.debug("Scan error:", errorMessage);
+      // apenas loga silenciosamente
     }
 
-    // Inicia o leitor
     async function startScanner() {
       try {
         html5QrCode = new Html5Qrcode("reader");
@@ -158,7 +142,6 @@
           return;
         }
 
-        // Tenta usar a câmera traseira (se disponível), senão usa a primeira
         let cameraConfig = { facingMode: "environment" };
         const backCamera = devices.find(d => /back|rear|environment/i.test((d.label || "")));
         if (backCamera) { cameraConfig = backCamera.id; }
