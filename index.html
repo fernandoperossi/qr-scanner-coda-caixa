@@ -14,9 +14,11 @@
       justify-content: center;
       height: 100vh;
       background: #f9f9f9;
+      font-family: sans-serif;
     }
     #reader {
       width: 300px;
+      margin-top: 20px;
     }
   </style>
 </head>
@@ -25,38 +27,46 @@
   <div id="reader"></div>
 
   <script>
+    const html5QrCode = new Html5Qrcode("reader");
     let alreadyScanned = false;
 
-    function onScanSuccess(decodedText, decodedResult) {
-      if (alreadyScanned) return; // evita múltiplas leituras
+    function onScanSuccess(decodedText) {
+      if (alreadyScanned) return;
       alreadyScanned = true;
 
-      // Para o scanner imediatamente
-      html5QrcodeScanner.clear().then(_ => {
+      // Para a câmera
+      html5QrCode.stop().then(() => {
         console.log("Scanner parado.");
-      }).catch(error => {
-        console.error("Erro ao parar scanner: ", error);
-      });
+      }).catch(err => console.error("Erro ao parar scanner", err));
 
-      // Envia o valor para o Coda via postMessage
+      // Envia resultado para o Coda
       if (window.parent) {
         window.parent.postMessage({ qrCode: decodedText }, "*");
+      } else {
+        // fallback: envia via URL
+        window.location.href = window.location.origin + "?qr=" + encodeURIComponent(decodedText);
       }
 
-      // Alternativa: redirecionar com o valor na URL (se usar IFrame no Coda)
-      // window.location.href = window.location.origin + "?qr=" + encodeURIComponent(decodedText);
+      // Mostra rapidamente na tela (opcional)
+      document.body.innerHTML = `<h2>QR Code lido:</h2><p>${decodedText}</p>`;
     }
 
     function onScanError(errorMessage) {
-      // Apenas loga o erro de leitura, sem travar
-      console.warn(errorMessage);
+      // Apenas ignora erros de leitura
     }
 
-    let html5QrcodeScanner = new Html5QrcodeScanner(
-      "reader",
-      { fps: 10, qrbox: 250 }
-    );
-    html5QrcodeScanner.render(onScanSuccess, onScanError);
+    // Pede câmera traseira (quando disponível)
+    Html5Qrcode.getCameras().then(devices => {
+      if (devices && devices.length) {
+        let cameraId = devices.length > 1 ? devices[1].id : devices[0].id;
+        html5QrCode.start(
+          cameraId,
+          { fps: 10, qrbox: 250 },
+          onScanSuccess,
+          onScanError
+        );
+      }
+    }).catch(err => console.error("Erro ao acessar câmeras", err));
   </script>
 </body>
 </html>
