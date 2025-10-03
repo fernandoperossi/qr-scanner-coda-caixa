@@ -7,10 +7,9 @@
 
   <style>
     body { font-family: Arial, sans-serif; text-align: center; padding: 18px; }
-    #reader { width: 100%; max-width: 420px; margin: 0 auto; display: none; }
+    #reader { width: 100%; max-width: 420px; margin: 0 auto; }
     #resultado { margin-top: 12px; font-size: 16px; }
     #status { margin-top: 8px; font-weight: bold; color: #b00; }
-    button { margin-top: 16px; padding: 10px 18px; border-radius: 6px; border: 1px solid #ccc; background: #007bff; color: white; cursor: pointer; font-size: 15px; }
   </style>
 
   <script src="https://unpkg.com/html5-qrcode"></script>
@@ -18,9 +17,8 @@
 <body>
   <h2>Escanear QR Code</h2>
   <div id="reader"></div>
-  <div id="resultado">Clique no botão para iniciar</div>
+  <div id="resultado">Aguardando leitura...</div>
   <div id="status"></div>
-  <button id="startBtn">Iniciar scanner</button>
 
   <script>
     // ===== CONFIGURAÇÕES =====
@@ -28,6 +26,7 @@
     const DOC_ID = "AeDUOeLw7V";       
     const TABLE_NAME = "Scanner";      
     const COLUMN_ID = "c-c2KFsNnkvh";  
+    const CODA_RETURN_URL = "https://coda.io/d/Paroquia-Sao-Gaspar-Bertoni_dAeDUOeLw7V"; // <-- link do doc
 
     let html5QrCode = null;
     let scanned = false;
@@ -82,14 +81,14 @@
 
       const ok = await enviarParaCoda(decodedText);
 
-      // Fecha a aba se foi aberta pelo Coda
+      // Volta para o Coda após enviar
       setTimeout(() => {
-        window.close();
+        window.location.href = CODA_RETURN_URL;
       }, ok ? 800 : 1500);
     }
 
     function onScanError() {
-      // erros de leitura podem ser ignorados
+      // ignora erros de leitura
     }
 
     async function startScanner() {
@@ -105,7 +104,6 @@
         const backCamera = devices.find(d => /back|rear|environment/i.test((d.label || "")));
         if (backCamera) { cameraConfig = backCamera.id; }
 
-        document.getElementById("reader").style.display = "block";
         await html5QrCode.start(
           cameraConfig,
           { fps: 10, qrbox: 250 },
@@ -115,13 +113,13 @@
 
         document.getElementById("status").style.color = "#333";
         document.getElementById("status").innerText = "Aguardando QR...";
-        document.getElementById("resultado").innerText = "";
       } catch (err) {
         document.getElementById("status").innerText = "❌ Erro ao iniciar: " + err;
       }
     }
 
-    document.getElementById("startBtn").addEventListener("click", startScanner);
+    // inicia assim que a aba abrir (já é uma interação vinda do botão no Coda)
+    startScanner();
   </script>
 </body>
 </html>
