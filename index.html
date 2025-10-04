@@ -6,10 +6,25 @@
   <title>Scanner QR Code - Coda</title>
 
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 18px; }
-    #reader { width: 100%; max-width: 420px; margin: 0 auto; }
-    #resultado { margin-top: 12px; font-size: 16px; }
-    #status { margin-top: 8px; font-weight: bold; color: #b00; }
+    body { 
+      font-family: Arial, sans-serif; 
+      text-align: center; 
+      padding: 18px; 
+    }
+    #reader { 
+      width: 100%; 
+      max-width: 420px; 
+      margin: 0 auto; 
+    }
+    #resultado { 
+      margin-top: 12px; 
+      font-size: 16px; 
+    }
+    #status { 
+      margin-top: 8px; 
+      font-weight: bold; 
+      color: #b00; 
+    }
   </style>
 
   <script src="https://unpkg.com/html5-qrcode"></script>
@@ -26,7 +41,7 @@
     const DOC_ID = "AeDUOeLw7V";       
     const TABLE_NAME = "Scanner";      
     const COLUMN_ID = "c-c2KFsNnkvh";  
-    const CODA_RETURN_URL = "https://coda.io/d/Paroquia-Sao-Gaspar-Bertoni_dAeDUOeLw7V"; // <-- link do doc
+    const CODA_RETURN_URL = "https://coda.io/d/Paroquia-Sao-Gaspar-Bertoni_dAeDUOeLw7V"; // link do doc
 
     let html5QrCode = null;
     let scanned = false;
@@ -81,9 +96,16 @@
 
       const ok = await enviarParaCoda(decodedText);
 
-      // Volta para o Coda após enviar
+      // ===== Volta ou fecha aba após o envio =====
       setTimeout(() => {
-        window.location.href = CODA_RETURN_URL;
+        if (window.opener) {
+          // se foi aberto a partir de outra aba, fecha e volta o foco
+          window.opener.focus();
+          window.close();
+        } else {
+          // se está na mesma aba, apenas volta para o doc Coda
+          window.location.replace(CODA_RETURN_URL);
+        }
       }, ok ? 800 : 1500);
     }
 
@@ -118,9 +140,8 @@
       }
     }
 
-    // inicia assim que a aba abrir (já é uma interação vinda do botão no Coda)
+    // inicia assim que a aba abrir (interação vinda do botão no Coda)
     startScanner();
   </script>
 </body>
 </html>
-
