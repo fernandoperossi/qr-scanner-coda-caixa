@@ -6,25 +6,10 @@
   <title>Scanner QR Code - Coda</title>
 
   <style>
-    body { 
-      font-family: Arial, sans-serif; 
-      text-align: center; 
-      padding: 18px; 
-    }
-    #reader { 
-      width: 100%; 
-      max-width: 420px; 
-      margin: 0 auto; 
-    }
-    #resultado { 
-      margin-top: 12px; 
-      font-size: 16px; 
-    }
-    #status { 
-      margin-top: 8px; 
-      font-weight: bold; 
-      color: #b00; 
-    }
+    body { font-family: Arial, sans-serif; text-align: center; padding: 18px; }
+    #reader { width: 100%; max-width: 420px; margin: 0 auto; }
+    #resultado { margin-top: 12px; font-size: 16px; }
+    #status { margin-top: 8px; font-weight: bold; color: #b00; }
   </style>
 
   <script src="https://unpkg.com/html5-qrcode"></script>
@@ -36,103 +21,22 @@
   <div id="status"></div>
 
   <script>
-    // ===== CONFIGURAÇÕES (substitua pelos seus valores) =====
+    // ===== CONFIGURAÇÕES =====
     const CODA_API_KEY = "6589a950-8a55-46a5-b658-ab196e49c4e1";
     const DOC_ID = "AeDUOeLw7V";       
     const TABLE_NAME = "Scanner";      
     const COLUMN_ID = "c-c2KFsNnkvh";  
     const CODA_RETURN_URL = "https://coda.io/d/Paroquia-Sao-Gaspar-Bertoni_dAeDUOeLw7V";
-    // =======================================================
+    // ==========================
 
-    const LOCK_KEY = "coda_scanner_lock_v1"; // chave localStorage
-    const LOCK_TTL = 30 * 1000; // 30s - considera expirado após esse tempo sem heartbeat
-    const LOCK_REFRESH_INTERVAL = 2000; // 2s - atualiza timestamp
-    const TAB_ID = Math.random().toString(36).slice(2, 10);
-
-    let lockInterval = null;
     let html5QrCode = null;
     let scanned = false;
 
-    const resultadoEl = document.getElementById("resultado");
-    const statusEl = document.getElementById("status");
-
-    // tenta adquirir lock; retorna true se conseguiu
-    function tryAcquireLock() {
-      try {
-        const raw = localStorage.getItem(LOCK_KEY);
-        if (raw) {
-          const obj = JSON.parse(raw);
-          const age = Date.now() - (obj.ts || 0);
-          if (age < LOCK_TTL && obj.tabId && obj.tabId !== TAB_ID) {
-            // outro tab tem lock recente -> não adquirir
-            return false;
-          }
-        }
-        // grava nosso lock
-        const payload = { tabId: TAB_ID, ts: Date.now() };
-        localStorage.setItem(LOCK_KEY, JSON.stringify(payload));
-        // start heartbeat
-        lockInterval = setInterval(() => {
-          try {
-            const cur = JSON.parse(localStorage.getItem(LOCK_KEY) || "{}");
-            if (cur.tabId === TAB_ID) {
-              cur.ts = Date.now();
-              localStorage.setItem(LOCK_KEY, JSON.stringify(cur));
-            } else {
-              // se por algum motivo lock trocou, limpamos nosso interval
-              clearInterval(lockInterval);
-              lockInterval = null;
-            }
-          } catch(e) { /* ignore */ }
-        }, LOCK_REFRESH_INTERVAL);
-        return true;
-      } catch (e) {
-        console.warn("Lock acquire error:", e);
-        return true; // fallback: permitir para não bloquear o usuário por erro de storage
-      }
-    }
-
-    function releaseLock() {
-      try {
-        const raw = localStorage.getItem(LOCK_KEY);
-        if (!raw) return;
-        const obj = JSON.parse(raw);
-        if (obj.tabId === TAB_ID) {
-          localStorage.removeItem(LOCK_KEY);
-        }
-      } catch (e) { /* ignore */ }
-      if (lockInterval) { clearInterval(lockInterval); lockInterval = null; }
-    }
-
-    // Se outra aba adquirir lock, podemos reagir (opcional)
-    window.addEventListener("storage", (ev) => {
-      if (ev.key === LOCK_KEY) {
-        // lock mudou em outra aba — opcionalmente podemos fechar esta aba se não tiver lock
-        try {
-          const raw = localStorage.getItem(LOCK_KEY);
-          if (raw) {
-            const obj = JSON.parse(raw);
-            if (obj.tabId !== TAB_ID) {
-              // outra aba pegou lock -> sair desta aba (retornar para coda)
-              statusEl.innerText = "Scanner aberto em outra aba. Voltando ao Coda...";
-              setTimeout(() => { window.location.replace(CODA_RETURN_URL); }, 700);
-            }
-          }
-        } catch(e){}
-      }
-    });
-
     async function enviarParaCoda(valor) {
-      const url = `https://coda.io/apis/v1/docs/${encodeURIComponent(DOC_ID)}/tables/${encodeURIComponent(TABLE_NAME)}/rows`;
-      const body = {
-        rows: [
-          { cells: [{ column: COLUMN_ID, value: valor }] }
-        ]
-      };
+      const url = `https://coda.io/apis/v1/docs/${DOC_ID}/tables/${TABLE_NAME}/rows`;
+      const body = { rows: [ { cells: [{ column: COLUMN_ID, value: valor }] } ] };
 
       try {
-        statusEl.style.color = "#333";
-        statusEl.innerText = "Enviando para Coda...";
         const resp = await fetch(url, {
           method: "POST",
           headers: {
@@ -144,19 +48,15 @@
 
         if (!resp.ok) {
           const errorBody = await resp.text();
-          statusEl.style.color = "#b00";
-          statusEl.innerText = "❌ Erro ao enviar: " + errorBody;
-          console.error("Erro Coda:", resp.status, errorBody);
+          document.getElementById("status").innerText = "❌ Erro ao enviar: " + errorBody;
           return false;
         }
 
-        statusEl.style.color = "green";
-        statusEl.innerText = "✅ Enviado para Coda!";
+        document.getElementById("status").style.color = "green";
+        document.getElementById("status").innerText = "✅ Enviado para Coda!";
         return true;
       } catch (err) {
-        statusEl.style.color = "#b00";
-        statusEl.innerText = "❌ Falha: " + err.message;
-        console.error(err);
+        document.getElementById("status").innerText = "❌ Falha: " + err.message;
         return false;
       }
     }
@@ -165,7 +65,7 @@
       if (scanned) return;
       scanned = true;
 
-      resultadoEl.innerText = "QR lido: " + decodedText;
+      document.getElementById("resultado").innerText = "QR lido: " + decodedText;
 
       try {
         if (html5QrCode) {
@@ -178,49 +78,30 @@
 
       const ok = await enviarParaCoda(decodedText);
 
-      // liberar lock antes de tentar fechar/navegar
-      try { releaseLock(); } catch(e){}
-
-      // tentar focar aba original e fechar esta; fallback: navegar nesta aba
+      // tenta fechar ou voltar automaticamente
       setTimeout(() => {
-        if (window.opener && !window.opener.closed) {
-          try {
-            window.opener.location.href = CODA_RETURN_URL;
-            // fecha esta aba (se permitido)
+        try {
+          if (window.opener && !window.opener.closed) {
             window.close();
-            return;
-          } catch (e) {
-            console.warn("Não foi possível usar opener:", e);
-            // fallback para replace nesta aba
+          } else if (document.referrer) {
+            history.back(); // volta à aba anterior
+          } else {
+            window.location.href = CODA_RETURN_URL;
           }
+        } catch (e) {
+          window.location.href = CODA_RETURN_URL;
         }
-        // fallback geral: replace nesta aba (não deixa histórico)
-        window.location.replace(CODA_RETURN_URL);
-      }, ok ? 600 : 1200);
+      }, ok ? 800 : 1500);
     }
 
-    function onScanError(errorMessage) {
-      // ignorar erros contínuos de leitura
-      // console.debug("Scan error:", errorMessage);
-    }
+    function onScanError() {}
 
     async function startScanner() {
-      // Antes de começar, tenta adquirir lock. Se não conseguir, volta ao Coda.
-      const okLock = tryAcquireLock();
-      if (!okLock) {
-        statusEl.style.color = "#b00";
-        statusEl.innerText = "O scanner já está aberto em outra aba. Voltando ao Coda...";
-        setTimeout(() => { window.location.replace(CODA_RETURN_URL); }, 700);
-        return;
-      }
-
       try {
         html5QrCode = new Html5Qrcode("reader");
         const devices = await Html5Qrcode.getCameras();
         if (!devices || devices.length === 0) {
-          statusEl.style.color = "#b00";
-          statusEl.innerText = "Nenhuma câmera encontrada.";
-          releaseLock();
+          document.getElementById("status").innerText = "Nenhuma câmera encontrada.";
           return;
         }
 
@@ -228,31 +109,15 @@
         const backCamera = devices.find(d => /back|rear|environment/i.test((d.label || "")));
         if (backCamera) { cameraConfig = backCamera.id; }
 
-        await html5QrCode.start(
-          cameraConfig,
-          { fps: 10, qrbox: 250 },
-          onScanSuccess,
-          onScanError
-        );
-
-        statusEl.style.color = "#333";
-        statusEl.innerText = "Aguardando QR...";
+        await html5QrCode.start(cameraConfig, { fps: 10, qrbox: 250 }, onScanSuccess, onScanError);
+        document.getElementById("status").style.color = "#333";
+        document.getElementById("status").innerText = "Aguardando QR...";
       } catch (err) {
-        statusEl.style.color = "#b00";
-        statusEl.innerText = "❌ Erro ao iniciar: " + (err && err.message ? err.message : err);
-        console.error(err);
-        releaseLock();
+        document.getElementById("status").innerText = "❌ Erro ao iniciar: " + err;
       }
     }
 
-    // tenta iniciar scanner automaticamente (se o botão do Coda abriu a aba, em geral isso funciona)
     startScanner();
-
-    // limpa lock no unload
-    window.addEventListener("beforeunload", () => {
-      try { releaseLock(); } catch(e) {}
-      try { if (html5QrCode) html5QrCode.stop(); } catch(e) {}
-    });
   </script>
 </body>
 </html>
