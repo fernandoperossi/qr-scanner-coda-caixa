@@ -1,123 +1,74 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Scanner QR Code - Coda</title>
-
-  <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 18px; }
-    #reader { width: 100%; max-width: 420px; margin: 0 auto; }
-    #resultado { margin-top: 12px; font-size: 16px; }
-    #status { margin-top: 8px; font-weight: bold; color: #b00; }
-  </style>
-
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leitor de QR Code - Coda Caixa</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+      background: #f5f6fa;
+    }
+    #reader {
+      width: 300px;
+      margin: 20px auto;
+    }
+    #result {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+    button {
+      background: #0066cc;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-  <h2>Escanear QR Code</h2>
+  <h2>Leitor de QR Code</h2>
   <div id="reader"></div>
-  <div id="resultado">Aguardando leitura...</div>
-  <div id="status"></div>
+  <div id="result">Aponte a câmera para o QR Code</div>
 
   <script>
-    // ===== CONFIGURAÇÕES =====
-    const CODA_API_KEY = "6589a950-8a55-46a5-b658-ab196e49c4e1";
-    const DOC_ID = "AeDUOeLw7V";       
-    const TABLE_NAME = "Scanner";      
-    const COLUMN_ID = "c-c2KFsNnkvh";  
-    const CODA_RETURN_URL = "https://coda.io/d/Paroquia-Sao-Gaspar-Bertoni_dAeDUOeLw7V";
-    // ==========================
-
-    let html5QrCode = null;
-    let scanned = false;
-
-    async function enviarParaCoda(valor) {
-      const url = `https://coda.io/apis/v1/docs/${DOC_ID}/tables/${TABLE_NAME}/rows`;
-      const body = { rows: [ { cells: [{ column: COLUMN_ID, value: valor }] } ] };
-
-      try {
-        const resp = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${CODA_API_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(body)
-        });
-
-        if (!resp.ok) {
-          const errorBody = await resp.text();
-          document.getElementById("status").innerText = "❌ Erro ao enviar: " + errorBody;
-          return false;
-        }
-
-        document.getElementById("status").style.color = "green";
-        document.getElementById("status").innerText = "✅ Enviado para Coda!";
-        return true;
-      } catch (err) {
-        document.getElementById("status").innerText = "❌ Falha: " + err.message;
-        return false;
-      }
-    }
+    const urlParams = new URLSearchParams(window.location.search);
+    const user = urlParams.get("u") || "Desconhecido";
 
     async function onScanSuccess(decodedText) {
-      if (scanned) return;
-      scanned = true;
-
-      document.getElementById("resultado").innerText = "QR lido: " + decodedText;
+      document.getElementById("result").innerText = "QR lido: " + decodedText;
 
       try {
-        if (html5QrCode) {
-          await html5QrCode.stop();
-          try { html5QrCode.clear(); } catch(e){}
+        const response = await fetch("/api/save-scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user: user,
+            qr_value: decodedText
+          })
+        });
+
+        if (response.ok) {
+          document.getElementById("result").innerText = "✅ QR salvo com sucesso no Coda!";
+          setTimeout(() => window.close(), 1500);
+        } else {
+          document.getElementById("result").innerText = "❌ Falha ao enviar ao Coda";
         }
-      } catch (err) {
-        console.warn("Erro ao parar câmera:", err);
-      }
-
-      const ok = await enviarParaCoda(decodedText);
-
-      // tenta fechar ou voltar automaticamente
-      setTimeout(() => {
-        try {
-          if (window.opener && !window.opener.closed) {
-            window.close();
-          } else if (document.referrer) {
-            history.back(); // volta à aba anterior
-          } else {
-            window.location.href = CODA_RETURN_URL;
-          }
-        } catch (e) {
-          window.location.href = CODA_RETURN_URL;
-        }
-      }, ok ? 800 : 1500);
-    }
-
-    function onScanError() {}
-
-    async function startScanner() {
-      try {
-        html5QrCode = new Html5Qrcode("reader");
-        const devices = await Html5Qrcode.getCameras();
-        if (!devices || devices.length === 0) {
-          document.getElementById("status").innerText = "Nenhuma câmera encontrada.";
-          return;
-        }
-
-        let cameraConfig = { facingMode: "environment" };
-        const backCamera = devices.find(d => /back|rear|environment/i.test((d.label || "")));
-        if (backCamera) { cameraConfig = backCamera.id; }
-
-        await html5QrCode.start(cameraConfig, { fps: 10, qrbox: 250 }, onScanSuccess, onScanError);
-        document.getElementById("status").style.color = "#333";
-        document.getElementById("status").innerText = "Aguardando QR...";
-      } catch (err) {
-        document.getElementById("status").innerText = "❌ Erro ao iniciar: " + err;
+      } catch (error) {
+        document.getElementById("result").innerText = "⚠️ Erro de rede: " + error.message;
       }
     }
 
-    startScanner();
+    const html5QrCode = new Html5Qrcode("reader");
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      onScanSuccess
+    );
   </script>
 </body>
 </html>
