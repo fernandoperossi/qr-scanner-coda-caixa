@@ -41,8 +41,10 @@ cursor: pointer;
 
 <script>
     // Captura o parâmetro de usuário (exemplo: index.html?u=João)
-const urlParams = new URLSearchParams(window.location.search);
-const user = urlParams.get("u") || "Desconhecido";
+const rawQuery = window.location.search;
+const match = rawQuery.match(/[?&]u=([^&]+)/i);
+const user = match ? decodeURIComponent(match[1]) : "Desconhecido";
+
 
     // Cria o objeto de leitura do QR
     const html5QrCode = new Html5Qrcode("reader");
@@ -98,3 +100,4 @@ html5QrCode.start(
 </script>
 </body>
 </html>
+
