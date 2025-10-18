@@ -4,9 +4,15 @@ export default async function handler(req, res) {
   }
 
   const { user, qr_value } = req.body;
-  const { CODA_API_KEY, CODA_DOC_ID, CODA_TABLE_ID, CODA_COLUMN_ID } = process.env;
+  const {
+    CODA_API_KEY,
+    CODA_DOC_ID,
+    CODA_TABLE_ID,
+    CODA_COLUMN_ID,        // coluna Scanner
+    CODA_COLUMN_USER_ID    // coluna Usuário
+  } = process.env;
 
-  if (!CODA_API_KEY || !CODA_DOC_ID || !CODA_TABLE_ID || !CODA_COLUMN_ID) {
+  if (!CODA_API_KEY || !CODA_DOC_ID || !CODA_TABLE_ID || !CODA_COLUMN_ID || !CODA_COLUMN_USER_ID) {
     return res.status(500).json({ error: "Variáveis de ambiente não configuradas corretamente" });
   }
 
@@ -23,7 +29,8 @@ export default async function handler(req, res) {
           rows: [
             {
               cells: [
-                { column: CODA_COLUMN_ID, value: `${user} - ${qr_value}` }
+                { column: CODA_COLUMN_USER_ID, value: user },
+                { column: CODA_COLUMN_ID, value: qr_value }
               ],
             },
           ],
