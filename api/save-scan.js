@@ -3,11 +3,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Método não permitido" });
   }
 
-  const { code } = req.body;
-  const { CODA_API_TOKEN, CODA_DOC_ID, CODA_TABLE_ID } = process.env;
+  const { user, qr_value } = req.body;
+  const { CODA_API_KEY, CODA_DOC_ID, CODA_TABLE_ID, CODA_COLUMN_ID } = process.env;
 
-  if (!CODA_API_TOKEN || !CODA_DOC_ID || !CODA_TABLE_ID) {
-    return res.status(500).json({ error: "Variáveis de ambiente não configuradas" });
+  if (!CODA_API_KEY || !CODA_DOC_ID || !CODA_TABLE_ID || !CODA_COLUMN_ID) {
+    return res.status(500).json({ error: "Variáveis de ambiente não configuradas corretamente" });
   }
 
   try {
@@ -16,14 +16,14 @@ export default async function handler(req, res) {
       {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${CODA_API_TOKEN}`,
+          "Authorization": `Bearer ${CODA_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           rows: [
             {
               cells: [
-                { column: "Scanner", value: code } // coluna principal
+                { column: CODA_COLUMN_ID, value: `${user} - ${qr_value}` }
               ],
             },
           ],
@@ -38,6 +38,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({ success: true });
   } catch (error) {
+    console.error("Erro ao salvar no Coda:", error.message);
     res.status(500).json({ error: error.message });
   }
 }
