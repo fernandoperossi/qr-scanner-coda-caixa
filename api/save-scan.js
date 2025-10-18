@@ -1,13 +1,14 @@
 export default async function handler(req, res) {
-  const { card, user } = req.query;
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Método não permitido" });
+  }
 
-  // Variáveis armazenadas no painel da Vercel (Environment Variables)
-  const CODA_API_TOKEN = process.env.CODA_API_TOKEN;
-  const CODA_DOC_ID = process.env.CODA_DOC_ID;
-  const CODA_TABLE_ID = process.env.CODA_TABLE_ID;
+  const { code } = req.body;
+  const { CODA_API_TOKEN, CODA_DOC_ID, CODA_TABLE_ID } = process.env;
 
-  // ID da coluna onde o valor será salvo (fixo no código)
-  const COLUMN_ID = "c-c2KFsNnkvh"; // <-- Substitua pelo ID real da coluna no seu Coda
+  if (!CODA_API_TOKEN || !CODA_DOC_ID || !CODA_TABLE_ID) {
+    return res.status(500).json({ error: "Variáveis de ambiente não configuradas" });
+  }
 
   try {
     const response = await fetch(
@@ -22,22 +23,21 @@ export default async function handler(req, res) {
           rows: [
             {
               cells: [
-                { column: COLUMN_ID, value: card },
-                { column: "c-UserName", value: user } // opcional: salva o nome do usuário
-              ]
-            }
-          ]
+                { column: "Scanner", value: code } // coluna principal
+              ],
+            },
+          ],
         }),
       }
     );
 
     if (!response.ok) {
-      const err = await response.text();
-      return res.status(400).json({ error: err });
+      const errorText = await response.text();
+      throw new Error(`Erro do Coda: ${errorText}`);
     }
 
-    res.status(200).json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(200).json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 }
