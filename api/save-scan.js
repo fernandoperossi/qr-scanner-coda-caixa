@@ -1,67 +1,83 @@
+// api/save-scan.js
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Método não permitido" });
   }
 
-  const {
-    CODA_API_KEY,
-    CODA_DOC_ID,
-    CODA_TABLE_ID,
-    CODA_COLUMN_ID,
-    CODA_COLUMN_USER_ID,
-    CODA_COLUMN_DATETIME_ID,
-  } = process.env;
-
   try {
-    const { qrCodeData, user } = req.body;
+    const { user, qr_value } = req.body || {};
 
-    if (!qrCodeData || !user) {
-      return res.status(400).json({ error: "qrCodeData e user são obrigatórios" });
+    if (!user || !qr_value) {
+      return res.status(400).json({ error: "user e qr_value são obrigatórios" });
     }
 
-    // 🔹 Corrige o problema dos espaços removidos — decodeURIComponent
-    const decodedUser = decodeURIComponent(user);
+    // Variáveis de ambiente
+    const {
+      CODA_API_KEY,
+      CODA_DOC_ID,
+      CODA_TABLE_ID,
+      CODA_COLUMN_ID,        // Coluna Scanner
+      CODA_COLUMN_USER_ID,   // Coluna Usuário
+      CODA_COLUMN_DATETIME_ID // Coluna Data/Hora
+    } = process.env;
 
-    // 🔹 Prepara o payload com os tipos corretos
-    const payload = {
-      rows: [
-        {
-          cells: [
-            { column: CODA_COLUMN_ID, value: qrCodeData },
-            { column: CODA_COLUMN_USER_ID, value: [decodedUser] }, // <- Envia como array
-            { column: CODA_COLUMN_DATETIME_ID, value: new Date().toISOString() },
-          ],
-        },
-      ],
-    };
+    if (!CODA_API_KEY || !CODA_DOC_ID || !CODA_TABLE_ID) {
+      return res.status(500).json({ error: "Variáveis de ambiente não configuradas corretamente" });
+    }
 
-    // 🔹 Envia para o Coda
+    const cells = [];
+
+    // Coluna Usuário
+    if (user) {
+      cells.push({
+        column: CODA_COLUMN_USER_ID || "Usuário",
+        value: user
+      });
+    }
+
+    // Coluna Scanner
+    if (qr_value) {
+      cells.push({
+        column: CODA_COLUMN_ID || "Scanner",
+        value: qr_value
+      });
+    }
+
+    // Coluna Data/Hora
+    if (CODA_COLUMN_DATETIME_ID) {
+      cells.push({
+        column: CODA_COLUMN_DATETIME_ID,
+        value: new Date().toISOString()
+      });
+    }
+
+    const body = { rows: [{ cells }] };
+
     const response = await fetch(
       `https://coda.io/apis/v1/docs/${CODA_DOC_ID}/tables/${CODA_TABLE_ID}/rows`,
       {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${CODA_API_KEY}`,
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body)
       }
     );
 
-    const data = await response.json();
+    const text = await response.text();
 
     if (!response.ok) {
-      throw new Error(
-        `Erro ao enviar ao Coda: ${JSON.stringify({
-          status: response.status,
-          details: data,
-        })}`
-      );
+      return res.status(response.status).json({
+        error: "Erro ao enviar ao Coda",
+        status: response.status,
+        details: text
+      });
     }
 
-    res.status(200).json({ success: true, data });
-  } catch (error) {
-    console.error("Erro ao salvar no Coda:", error);
-    res.status(500).json({ error: error.message });
+    return res.status(200).json({ success: true, result: text });
+  } catch (err) {
+    console.error("Erro interno save-scan:", err);
+    return res.status(500).json({ error: "Erro interno", details: err.message });
   }
 }
