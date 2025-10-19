@@ -40,9 +40,9 @@
   <div id="result">Aponte a câmera para o QR Code</div>
 
   <script>
-    // Captura o parâmetro do usuário (ex: index.html?u=João)
-    const urlParams = new URLSearchParams(window.location.search);
-    const user = decodeURIComponent(urlParams.get("u") || "Desconhecido");
+    // Captura e decodifica corretamente o nome do usuário
+    const rawUser = new URLSearchParams(window.location.search).get("u") || "Desconhecido";
+    const user = decodeURIComponent(rawUser.replace(/\+/g, " "));
 
     // Cria o leitor de QR Code
     const html5QrCode = new Html5Qrcode("reader");
@@ -97,3 +97,4 @@
   </script>
 </body>
 </html>
+
