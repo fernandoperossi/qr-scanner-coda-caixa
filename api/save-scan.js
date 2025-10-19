@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   const dateColumn = CODA_COLUMN_DATETIME_ID || "Data/Hora";
 
   // Normaliza valores como string (remove espaços nas pontas)
-  const userValue = (user || "").toString().trim();
+  const userValue = (user || "").toString();
   const qrValue = (qr_value || "").toString().trim();
   const nowValue = new Date().toISOString();
 
