@@ -1,76 +1,67 @@
-// api/save-scan.js
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Método não permitido" });
   }
 
-  const { user, qr_value } = req.body || {};
-
   const {
     CODA_API_KEY,
     CODA_DOC_ID,
     CODA_TABLE_ID,
-    CODA_COLUMN_ID,          // coluna "Scanner"
-    CODA_COLUMN_USER_ID,     // coluna "Usuário" (tipo People)
-    CODA_COLUMN_DATETIME_ID  // coluna "Data/Hora"
+    CODA_COLUMN_ID,
+    CODA_COLUMN_USER_ID,
+    CODA_COLUMN_DATETIME_ID,
   } = process.env;
 
-  if (!CODA_API_KEY || !CODA_DOC_ID || !CODA_TABLE_ID) {
-    return res.status(500).json({ error: "Variáveis de ambiente ausentes" });
-  }
-
-  const scannerColumn = CODA_COLUMN_ID || "Scanner";
-  const userColumn = CODA_COLUMN_USER_ID || "Usuário";
-  const dateColumn = CODA_COLUMN_DATETIME_ID || "Data/Hora";
-
-  const userValue = (user || "").toString().trim();
-  const qrValue = (qr_value || "").toString().trim();
-  const nowValue = new Date().toISOString();
-
-  const cells = [];
-
-  // 👤 Envia como array de email para coluna tipo People
-  if (userValue) {
-    cells.push({
-      column: userColumn,
-      value: [{ email: userValue }]
-    });
-  }
-
-  cells.push({ column: scannerColumn, value: qrValue });
-
-  if (dateColumn) {
-    cells.push({ column: dateColumn, value: nowValue });
-  }
-
-  const body = { rows: [{ cells }] };
-
   try {
+    const { qrCodeData, user } = req.body;
+
+    if (!qrCodeData || !user) {
+      return res.status(400).json({ error: "qrCodeData e user são obrigatórios" });
+    }
+
+    // 🔹 Corrige o problema dos espaços removidos — decodeURIComponent
+    const decodedUser = decodeURIComponent(user);
+
+    // 🔹 Prepara o payload com os tipos corretos
+    const payload = {
+      rows: [
+        {
+          cells: [
+            { column: CODA_COLUMN_ID, value: qrCodeData },
+            { column: CODA_COLUMN_USER_ID, value: [decodedUser] }, // <- Envia como array
+            { column: CODA_COLUMN_DATETIME_ID, value: new Date().toISOString() },
+          ],
+        },
+      ],
+    };
+
+    // 🔹 Envia para o Coda
     const response = await fetch(
       `https://coda.io/apis/v1/docs/${CODA_DOC_ID}/tables/${CODA_TABLE_ID}/rows`,
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${CODA_API_KEY}`,
+          "Authorization": `Bearer ${CODA_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       }
     );
 
-    const text = await response.text();
+    const data = await response.json();
 
     if (!response.ok) {
-      return res.status(response.status).json({
-        error: "Erro ao enviar ao Coda",
-        status: response.status,
-        details: text,
-      });
+      throw new Error(
+        `Erro ao enviar ao Coda: ${JSON.stringify({
+          status: response.status,
+          details: data,
+        })}`
+      );
     }
 
-    return res.status(200).json({ success: true, result: text });
-  } catch (err) {
-    console.error("Erro interno save-scan:", err);
-    return res.status(500).json({ error: "Erro interno", details: err.message });
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error("Erro ao salvar no Coda:", error);
+    res.status(500).json({ error: error.message });
   }
 }
