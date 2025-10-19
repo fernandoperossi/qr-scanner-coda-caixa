@@ -1,107 +1,91 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Leitor de QR Code - Coda Caixa</title>
-<script src="https://unpkg.com/html5-qrcode"></script>
-<style>
-body {
-  font-family: Arial, sans-serif;
-  text-align: center;
-  padding: 20px;
-  background: #f5f6fa;
-}
-#reader {
-  width: 300px;
-  margin: 20px auto;
-  border: 2px solid #ccc;
-  border-radius: 10px;
-  background: white;
-  box-shadow: 0 0 10px rgba(0,0,0,0.1);
-}
-#result {
-  margin-top: 20px;
-  font-weight: bold;
-}
-button {
-  background: #0066cc;
-  color: white;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-}
-</style>
-</head>
-<body>
-<h2>Leitor de QR Code</h2>
-<div id="reader"></div>
-<div id="result">Aponte a câmera para o QR Code</div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Leitor de QR Code</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        background-color: #f3f4f6;
+        margin: 0;
+      }
+      h1 {
+        font-size: 1.5em;
+        margin-bottom: 1em;
+      }
+      video {
+        width: 300px;
+        border-radius: 8px;
+      }
+      #message {
+        margin-top: 1em;
+        font-size: 1em;
+        color: #333;
+        max-width: 90%;
+        text-align: center;
+        word-wrap: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Leitor de QR Code</h1>
+    <video id="preview"></video>
+    <p id="message"></p>
 
-<script>
-const params = new URLSearchParams(window.location.search);
-let userEmail = params.get("email") || "";
-let userName = params.get("u") || "";
+    <script src="https://cdn.jsdelivr.net/npm/instascan@1.0.0/instascan.min.js"></script>
+    <script>
+      const messageEl = document.getElementById("message");
+      const urlParams = new URLSearchParams(window.location.search);
 
-// Decodifica URL e normaliza
-userEmail = decodeURIComponent(userEmail.replace(/\+/g, " "));
-userName = decodeURIComponent(userName.replace(/\+/g, " "));
+      // 🔹 Agora o nome do usuário é corretamente decodificado
+      const user = decodeURIComponent(urlParams.get("u") || "").trim();
 
-// Se não houver email, usa nome (para compatibilidade)
-const user = userEmail || userName || "Desconhecido";
+      if (!user) {
+        messageEl.textContent = "❌ Usuário não informado na URL.";
+      } else {
+        messageEl.textContent = `Usuário conectado: ${user}`;
+      }
 
-const html5QrCode = new Html5Qrcode("reader");
-let hasScanned = false;
+      const scanner = new Instascan.Scanner({ video: document.getElementById("preview") });
+      scanner.addListener("scan", async (content) => {
+        messageEl.textContent = "⏳ Enviando para o Coda...";
 
-async function onScanSuccess(decodedText) {
-  if (hasScanned) return;
-  hasScanned = true;
+        try {
+          const response = await fetch("/api/save-scan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ qrCodeData: content, user }),
+          });
 
-  document.getElementById("result").innerText = "QR lido: " + decodedText;
+          const data = await response.json();
 
-  // Para o scanner
-  await html5QrCode.stop().catch(err => console.warn("Erro ao parar câmera:", err));
+          if (!response.ok) {
+            throw new Error(JSON.stringify(data));
+          }
 
-  try {
-    const response = await fetch("/api/save-scan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user: user,
-        qr_value: decodedText
-      })
-    });
+          messageEl.textContent = `✅ Código registrado com sucesso: ${content}`;
+        } catch (err) {
+          messageEl.textContent = `❌ Falha ao enviar ao Coda:\n${err.message}`;
+        }
+      });
 
-    if (response.ok) {
-      document.getElementById("result").innerText = "✅ QR salvo com sucesso no Coda!";
-      setTimeout(() => window.close(), 1500);
-    } else {
-      const errText = await response.text();
-      document.getElementById("result").innerText = "❌ Falha ao enviar ao Coda:\n" + errText;
-      hasScanned = false;
-    }
-  } catch (error) {
-    document.getElementById("result").innerText = "⚠️ Erro de rede: " + error.message;
-    hasScanned = false;
-  }
-}
-
-Html5Qrcode.getCameras().then(devices => {
-  if (devices && devices.length) {
-    html5QrCode.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
-      onScanSuccess,
-      errorMessage => console.log("QR não detectado:", errorMessage)
-    );
-  } else {
-    document.getElementById("result").innerText = "Nenhuma câmera detectada";
-  }
-}).catch(err => {
-  console.error("Erro ao acessar câmera:", err);
-  document.getElementById("result").innerText = "⚠️ Permita acesso à câmera no navegador.";
-});
-</script>
-</body>
+      Instascan.Camera.getCameras()
+        .then((cameras) => {
+          if (cameras.length > 0) {
+            scanner.start(cameras[0]);
+          } else {
+            messageEl.textContent = "Nenhuma câmera encontrada.";
+          }
+        })
+        .catch((e) => {
+          messageEl.textContent = "Erro ao acessar a câmera: " + e;
+        });
+    </script>
+  </body>
 </html>
