@@ -40,29 +40,43 @@
   <div id="result">Aponte a câmera para o QR Code</div>
 
   <script>
-    // Captura o nome do usuário com tolerância máxima (inclui espaços e +)
+    // --- Captura e reconstrói o nome do usuário ---
     let user = "Desconhecido";
     const query = window.location.search;
-    const match = query.match(/[?&]u=([^#]+)/i);
+    const match = query.match(/[?&]u=([^&]+)/i);
+
     if (match) {
-      user = decodeURIComponent(match[1].replace(/\+/g, " ")).trim();
+      let rawUser = match[1] || "";
+
+      // substitui "+" por espaço (caso venha assim)
+      rawUser = rawUser.replace(/\+/g, " ");
+
+      // decodifica caracteres especiais
+      rawUser = decodeURIComponent(rawUser);
+
+      // se ainda estiver tudo junto (ex: TSSolutions)
+      if (!rawUser.includes(" ") && /[a-z][A-Z]/.test(rawUser)) {
+        rawUser = rawUser.replace(/([a-z])([A-Z])/g, "$1 $2");
+      }
+
+      user = rawUser.trim();
     }
 
-    // Cria o leitor de QR Code
+    console.log("Usuário capturado:", user);
+
+    // --- Inicializa o leitor de QR Code ---
     const html5QrCode = new Html5Qrcode("reader");
-    let hasScanned = false; // evita múltiplas leituras
+    let hasScanned = false;
 
     async function onScanSuccess(decodedText) {
-      if (hasScanned) return; // impede múltiplos registros
+      if (hasScanned) return;
       hasScanned = true;
 
       document.getElementById("result").innerText = "QR lido: " + decodedText;
 
-      // ✅ Para o scanner imediatamente após ler o QR
-      await html5QrCode.stop().catch(err => console.warn("Erro ao parar câmera:", err));
+      html5QrCode.stop().catch(err => console.warn("Erro ao parar câmera:", err));
 
       try {
-        // Envia o valor escaneado ao backend
         const response = await fetch("/api/save-scan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -78,7 +92,7 @@
         } else {
           const errText = await response.text();
           document.getElementById("result").innerText = "❌ Falha ao enviar ao Coda:\n" + errText;
-          hasScanned = false; // permite nova tentativa
+          hasScanned = false;
         }
       } catch (error) {
         document.getElementById("result").innerText = "⚠️ Erro de rede: " + error.message;
@@ -86,20 +100,14 @@
       }
     }
 
-    // 🚀 Inicia o leitor de QR Code
     html5QrCode.start(
-      { facingMode: "environment" }, // usa a câmera traseira
+      { facingMode: "environment" },
       { fps: 10, qrbox: 250 },
       onScanSuccess,
       (errorMessage) => {
         console.log("QR não detectado:", errorMessage);
       }
-    ).catch(err => {
-      document.getElementById("result").innerText = "⚠️ Erro ao acessar a câmera: " + err.message;
-      console.error("Erro ao iniciar câmera:", err);
-    });
+    );
   </script>
 </body>
 </html>
-
-
