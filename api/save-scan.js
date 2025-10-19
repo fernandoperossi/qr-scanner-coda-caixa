@@ -10,42 +10,47 @@ export default async function handler(req, res) {
     CODA_API_KEY,
     CODA_DOC_ID,
     CODA_TABLE_ID,
-    CODA_COLUMN_ID,        // Column ID da coluna Scanner (ex: c-c2KFsNnkvh)
-    CODA_COLUMN_USER_ID,   // Column ID da coluna Usuário (people) - opcional
-    CODA_COLUMN_DATETIME_ID // Column ID da coluna Data/Hora - opcional
+    CODA_COLUMN_ID,         // ID da coluna "Scanner"
+    CODA_COLUMN_USER_ID,    // ID da coluna "Usuário" (tipo People)
+    CODA_COLUMN_DATETIME_ID // ID da coluna "Data/Hora"
   } = process.env;
 
   if (!CODA_API_KEY || !CODA_DOC_ID || !CODA_TABLE_ID) {
-    return res.status(500).json({ error: "Variáveis de ambiente não configuradas corretamente" });
+    return res.status(500).json({
+      error: "Variáveis de ambiente não configuradas corretamente no Vercel"
+    });
   }
 
-  // Resolve o identificador da coluna a usar: prefere Column ID, senão nome literal
+  // Define os nomes/IDs das colunas
   const scannerColumn = CODA_COLUMN_ID || "Scanner";
   const userColumn = CODA_COLUMN_USER_ID || "Usuário";
   const dateColumn = CODA_COLUMN_DATETIME_ID || "Data/Hora";
 
-  // Normaliza valores como string (remove espaços nas pontas)
-  const userValue = (user || "").toString();
+  // Normaliza os valores
+  const userValue = (user || "").toString().trim();
   const qrValue = (qr_value || "").toString().trim();
   const nowValue = new Date().toISOString();
 
-  // Monta as células - envia apenas valores primitivos (strings)
+  // Monta as células a serem enviadas
   const cells = [];
 
-  // adiciona usuário somente se houver
+  // Coluna People → precisa ser um array de objetos com "name"
   if (userValue) {
-    cells.push({ column: userColumn, value: userValue });
+    cells.push({
+      column: userColumn,
+      value: [{ name: userValue }]
+    });
   }
 
-  // adiciona o QR (sempre)
+  // Coluna Scanner → texto simples
   cells.push({ column: scannerColumn, value: qrValue });
 
-  // adiciona data/hora se desejar
+  // Coluna Data/Hora → ISO string
   if (dateColumn) {
     cells.push({ column: dateColumn, value: nowValue });
   }
 
-  const body = { rows: [ { cells } ] };
+  const body = { rows: [{ cells }] };
 
   try {
     const response = await fetch(
@@ -63,7 +68,6 @@ export default async function handler(req, res) {
     const text = await response.text();
 
     if (!response.ok) {
-      // retorna erro com detalhe do Coda para depuração
       return res.status(response.status).json({
         error: "Erro ao enviar ao Coda",
         status: response.status,
@@ -74,6 +78,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, result: text });
   } catch (err) {
     console.error("Erro interno save-scan:", err);
-    return res.status(500).json({ error: "Erro interno", details: err.message });
+    return res.status(500).json({
+      error: "Erro interno no servidor",
+      details: err.message
+    });
   }
 }
